@@ -1,0 +1,7 @@
+puter-ui/
+*.log
+*.pid
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

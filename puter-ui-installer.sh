@@ -1,0 +1,1153 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+PROJECT_DIR="$HOME/puter-ui"
+LOG_FILE="$PROJECT_DIR/puter-ui.log"
+PORT=38080
+
+log() {
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo -e "$msg"
+    if [ -d "$PROJECT_DIR" ]; then
+        echo "$msg" >> "$LOG_FILE"
+    fi
+}
+
+info()    { log "${CYAN}[INFO]${NC} $1"; }
+success() { log "${GREEN}[OK]${NC} $1"; }
+warn()    { log "${YELLOW}[WARN]${NC} $1"; }
+error()   { log "${RED}[ERROR]${NC} $1"; }
+
+check_and_install() {
+    local pkg=$1
+    local cmd=${2:-$1}
+    if ! command -v "$cmd" &>/dev/null; then
+        warn "$pkg یافت نشد. در حال نصب..."
+        if pkg install -y "$pkg" >> "$LOG_FILE" 2>&1; then
+            success "$pkg با موفقیت نصب شد."
+        else
+            error "نصب $pkg ناموفق بود. لطفاً اینترنت را بررسی کنید."
+            exit 1
+        fi
+    else
+        success "$pkg از قبل نصب است."
+    fi
+}
+
+install_prerequisites() {
+    echo -e "\n${BLUE}══════════════════════════════════════${NC}"
+    echo -e "${BLUE}   بررسی و نصب پیش‌نیازها${NC}"
+    echo -e "${BLUE}══════════════════════════════════════${NC}\n"
+
+    mkdir -p "$PROJECT_DIR"
+
+    info "در حال به‌روزرسانی مخازن ترموکس..."
+    pkg update -y >> "$LOG_FILE" 2>&1
+
+    check_and_install nodejs node
+    check_and_install git git
+
+    if ! command -v live-server &>/dev/null; then
+        warn "live-server یافت نشد. در حال نصب..."
+        if npm install -g live-server >> "$LOG_FILE" 2>&1; then
+            success "live-server با موفقیت نصب شد."
+        else
+            error "نصب live-server ناموفق بود."
+            exit 1
+        fi
+    else
+        success "live-server از قبل نصب است."
+    fi
+}
+
+setup_project_dir() {
+    echo -e "\n${BLUE}══════════════════════════════════════${NC}"
+    echo -e "${BLUE}   راه‌اندازی پوشه پروژه${NC}"
+    echo -e "${BLUE}══════════════════════════════════════${NC}\n"
+
+    if [ -d "$PROJECT_DIR" ] && [ "$(ls -A "$PROJECT_DIR" 2>/dev/null)" ]; then
+        warn "پوشه $PROJECT_DIR از قبل وجود دارد و خالی نیست."
+        echo -ne "${YELLOW}آیا می‌خواهید محتوای آن پاک و بازنویسی شود؟ (y/n): ${NC}"
+        read -r answer
+        if [[ "$answer" =~ ^[Yy]$ ]]; then
+            rm -rf "${PROJECT_DIR:?}"/*
+            success "پوشه پاک‌سازی شد."
+        else
+            info "از محتوای موجود استفاده می‌شود."
+        fi
+    else
+        mkdir -p "$PROJECT_DIR"
+        success "پوشه پروژه ایجاد شد: $PROJECT_DIR"
+    fi
+}
+
+generate_index_html() {
+    echo -e "\n${BLUE}══════════════════════════════════════${NC}"
+    echo -e "${BLUE}   ایجاد فایل index.html${NC}"
+    echo -e "${BLUE}══════════════════════════════════════${NC}\n"
+
+    cat > "$PROJECT_DIR/index.html" << 'HTML_EOF'
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SalviaX AI</title>
+  <script src="https://js.puter.com/v2/"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:         #0c0c1e;
+      --sidebar-bg: #080818;
+      --surface:    #12122a;
+      --surface2:   #1a1a38;
+      --border:     rgba(110,86,207,0.2);
+      --border-lt:  rgba(139,120,255,0.35);
+      --v1:         #6e56cf;
+      --v2:         #9b8afb;
+      --v3:         #c4b5fd;
+      --lapis:      #3b6ff5;
+      --text:       #e2e0ff;
+      --muted:      #7c7aaa;
+      --dim:        #4a4870;
+      --glow:       rgba(110,86,207,0.5);
+      --send:       linear-gradient(135deg,#6e56cf,#3b6ff5);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    /* ══════════════════════════════════════
+       APP SHELL  —  sidebar + main
+    ══════════════════════════════════════ */
+    .app {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 240px;
+      min-width: 240px;
+      background: var(--sidebar-bg);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-logo {
+      padding: 20px 16px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo-text {
+      font-family: 'Dancing Script', cursive;
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(110deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 14px rgba(167,139,250,0.55));
+      line-height: 1.1;
+    }
+
+    .logo-tagline {
+      font-size: 0.62rem;
+      letter-spacing: 0.2em;
+      color: var(--dim);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .new-chat-btn {
+      margin: 12px 12px 8px;
+      padding: 8px 14px;
+      background: rgba(110,86,207,0.12);
+      border: 1px solid var(--border-lt);
+      border-radius: 10px;
+      color: var(--v3);
+      font-size: 0.8rem;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .new-chat-btn:hover {
+      background: rgba(110,86,207,0.22);
+      border-color: var(--v2);
+    }
+
+    /* model list in sidebar */
+    .sidebar-section-label {
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      color: var(--dim);
+      text-transform: uppercase;
+      padding: 10px 16px 4px;
+      flex-shrink: 0;
+    }
+
+    .model-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 8px 8px;
+    }
+
+    .model-list::-webkit-scrollbar { width: 3px; }
+    .model-list::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 2px; }
+
+    .model-group { margin-bottom: 10px; }
+
+    .model-group-name {
+      font-size: 0.62rem;
+      color: var(--dim);
+      letter-spacing: 0.1em;
+      padding: 4px 8px 2px;
+      text-transform: uppercase;
+    }
+
+    .model-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--muted);
+      transition: all 0.13s;
+      border: 1px solid transparent;
+    }
+    .model-item:hover { background: var(--surface); color: var(--text); }
+    .model-item.active {
+      background: rgba(110,86,207,0.18);
+      border-color: rgba(110,86,207,0.35);
+      color: var(--v3);
+      font-weight: 600;
+    }
+    .model-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── MAIN AREA ── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      position: relative;
+    }
+
+    /* topbar */
+    .topbar {
+      height: 52px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 10px;
+      flex-shrink: 0;
+      background: rgba(12,12,30,0.8);
+      backdrop-filter: blur(8px);
+    }
+
+    .topbar-model {
+      font-size: 0.82rem;
+      color: var(--v3);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .topbar-sep { width: 1px; height: 16px; background: var(--border); }
+
+    .topbar-mem {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .mem-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: #4ade80;
+      animation: blink 2.5s infinite;
+    }
+    @keyframes blink {
+      0%,100% { opacity:0.4; } 50% { opacity:1; }
+    }
+
+    .clear-btn {
+      margin-right: auto;
+      font-size: 0.72rem;
+      color: var(--dim);
+      cursor: pointer;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      background: none;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.13s;
+    }
+    .clear-btn:hover { border-color: var(--border); color: var(--muted); }
+
+    /* ── CHAT AREA ── */
+    .chat-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .chat-wrap::-webkit-scrollbar { width: 4px; }
+    .chat-wrap::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 2px; }
+
+    /* welcome */
+    .welcome {
+      margin: auto;
+      text-align: center;
+      color: var(--dim);
+      padding: 40px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .welcome-logo {
+      font-family: 'Dancing Script', cursive;
+      font-size: 3.2rem;
+      font-weight: 700;
+      background: linear-gradient(110deg,#60a5fa,#a78bfa,#f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 18px rgba(167,139,250,0.5));
+    }
+    .welcome-sub {
+      font-size: 0.82rem;
+      color: var(--dim);
+      line-height: 1.8;
+    }
+    .welcome-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 7px;
+      margin-top: 12px;
+    }
+    .chip {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.13s;
+    }
+    .chip:hover { border-color: var(--v2); color: var(--v3); background: rgba(110,86,207,0.1); }
+
+    /* message */
+    .msg-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 4px 0;
+      animation: msgIn 0.2s ease;
+    }
+    @keyframes msgIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+
+    .msg-row.user   { flex-direction: row-reverse; }
+
+    .avatar {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .avatar.ai {
+      background: linear-gradient(135deg, var(--v1), var(--lapis));
+      color: #fff;
+      box-shadow: 0 0 10px var(--glow);
+    }
+    .avatar.user-av {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--v3);
+    }
+
+    .bubble-wrap { flex: 1; min-width: 0; max-width: 75%; }
+
+    .msg-row.user .bubble-wrap { align-items: flex-end; display: flex; flex-direction: column; }
+
+    .bubble {
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 0.875rem;
+      line-height: 1.7;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      max-width: 100%;
+    }
+
+    .msg-row.user .bubble {
+      background: rgba(110,86,207,0.22);
+      border: 1px solid rgba(110,86,207,0.35);
+      border-top-left-radius: 4px;
+      color: var(--text);
+    }
+
+    .msg-row.ai .bubble {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top-right-radius: 4px;
+      color: var(--text);
+    }
+
+    .bubble.error {
+      background: rgba(239,68,68,0.1);
+      border-color: rgba(239,68,68,0.3);
+      color: #fca5a5;
+    }
+
+    .bubble img {
+      max-width: 260px;
+      border-radius: 10px;
+      border: 1px solid var(--border-lt);
+      display: block;
+      margin-top: 4px;
+    }
+
+    .attach-thumb {
+      max-width: 140px;
+      border-radius: 8px;
+      border: 1px solid var(--border-lt);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    /* thinking */
+    .thinking {
+      display: flex;
+      gap: 4px;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      border-top-right-radius: 4px;
+      width: fit-content;
+    }
+    .thinking span {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--v2);
+      animation: bbl 1.2s infinite;
+    }
+    .thinking span:nth-child(2) { animation-delay:.18s; }
+    .thinking span:nth-child(3) { animation-delay:.36s; }
+    @keyframes bbl {
+      0%,80%,100% { transform:scale(0.7); opacity:0.4; }
+      40%          { transform:scale(1.15); opacity:1; }
+    }
+
+    /* ── INPUT AREA ── */
+    .input-shell {
+      flex-shrink: 0;
+      padding: 10px 16px 14px;
+      border-top: 1px solid var(--border);
+      background: rgba(12,12,30,0.9);
+      backdrop-filter: blur(10px);
+    }
+
+    .attach-preview {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 8px;
+      margin-bottom: 6px;
+      background: rgba(110,86,207,0.1);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.75rem;
+      color: var(--v3);
+    }
+    .attach-preview.show { display: flex; }
+    .attach-preview img { width:36px;height:36px;object-fit:cover;border-radius:5px;border:1px solid var(--border-lt); }
+    .rm-attach { margin-right: auto; cursor:pointer; color:#f87171; font-size:0.9rem; padding:2px 5px; border-radius:4px; }
+    .rm-attach:hover { background:rgba(239,68,68,0.12); }
+
+    .input-box {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 8px 10px 8px 12px;
+      transition: border-color 0.15s;
+    }
+    .input-box:focus-within {
+      border-color: var(--v2);
+      box-shadow: 0 0 0 2px rgba(110,86,207,0.15);
+    }
+
+    #chat-input {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.875rem;
+      resize: none;
+      min-height: 24px;
+      max-height: 120px;
+      line-height: 1.5;
+      direction: rtl;
+    }
+    #chat-input::placeholder { color: var(--dim); }
+
+    .input-actions {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+
+    .icon-btn {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(110,86,207,0.08);
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      transition: all 0.13s;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .icon-btn:hover { background:rgba(110,86,207,0.18); border-color:var(--v2); color:var(--v3); }
+    .icon-btn input[type=file] { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%; }
+
+    #send-btn {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      border: none;
+      background: var(--send);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      transition: all 0.15s;
+      box-shadow: 0 3px 10px rgba(110,86,207,0.4);
+      flex-shrink: 0;
+    }
+    #send-btn:hover { box-shadow:0 4px 16px rgba(110,86,207,0.6); transform:translateY(-1px); }
+    #send-btn:active { transform:scale(0.95); }
+    #send-btn:disabled { opacity:0.35; cursor:not-allowed; transform:none; box-shadow:none; }
+
+    .input-hint {
+      text-align: center;
+      font-size: 0.65rem;
+      color: var(--dim);
+      margin-top: 6px;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── MOBILE: sidebar toggle ── */
+    .sidebar-toggle {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 32px; height: 32px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1rem;
+    }
+
+    @media (max-width: 680px) {
+      .sidebar { position:fixed; right:-240px; top:0; height:100%; z-index:100; transition:right 0.22s ease; }
+      .sidebar.open { right:0; box-shadow:-8px 0 30px rgba(0,0,0,0.5); }
+      .sidebar-toggle { display:flex; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-text">SalviaX</div>
+      <div class="logo-tagline">AI Interface</div>
+    </div>
+
+    <button class="new-chat-btn" onclick="newChat()">
+      ✦ <span>گفتگوی جدید</span>
+    </button>
+
+    <div class="sidebar-section-label">مدل‌ها</div>
+
+    <div class="model-list">
+
+      <div class="model-group">
+        <div class="model-group-name">OpenAI</div>
+        <div class="model-item active" data-model="gpt-4o" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#4ade80"></span>GPT-4o
+        </div>
+        <div class="model-item" data-model="gpt-4o-mini" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#4ade80"></span>GPT-4o Mini
+        </div>
+        <div class="model-item" data-model="o1-mini" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#facc15"></span>o1 Mini
+        </div>
+        <div class="model-item" data-model="o3-mini" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#facc15"></span>o3 Mini
+        </div>
+      </div>
+
+      <div class="model-group">
+        <div class="model-group-name">Anthropic</div>
+        <div class="model-item" data-model="claude-sonnet-4-5" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#60a5fa"></span>Claude Sonnet
+        </div>
+        <div class="model-item" data-model="claude-haiku-4-5-20251001" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#60a5fa"></span>Claude Haiku
+        </div>
+        <div class="model-item" data-model="claude-opus-4-5" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#818cf8"></span>Claude Opus
+        </div>
+      </div>
+
+      <div class="model-group">
+        <div class="model-group-name">Google</div>
+        <div class="model-item" data-model="gemini-2.5-flash" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#fb923c"></span>Gemini 2.5 Flash
+        </div>
+        <div class="model-item" data-model="gemini-2.5-pro" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#fb923c"></span>Gemini 2.5 Pro
+        </div>
+        <div class="model-item" data-model="gemini-2.0-flash" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#fdba74"></span>Gemini 2.0 Flash
+        </div>
+      </div>
+
+      <div class="model-group">
+        <div class="model-group-name">DeepSeek</div>
+        <div class="model-item" data-model="deepseek-chat" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#a78bfa"></span>DeepSeek V3
+        </div>
+        <div class="model-item" data-model="deepseek-reasoner" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#a78bfa"></span>DeepSeek R1
+        </div>
+      </div>
+
+      <div class="model-group">
+        <div class="model-group-name">Meta</div>
+        <div class="model-item" data-model="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#f472b6"></span>Llama 3.1 70B
+        </div>
+        <div class="model-item" data-model="meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#f472b6"></span>Llama 3.1 405B
+        </div>
+      </div>
+
+      <div class="model-group">
+        <div class="model-group-name">تصویر</div>
+        <div class="model-item" data-model="__img__" onclick="selectModel(this)">
+          <span class="model-dot" style="background:#e879f9"></span>🎨 Text to Image
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <main class="main">
+
+    <!-- topbar -->
+    <div class="topbar">
+      <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+      <span class="topbar-model" id="topbar-model">GPT-4o</span>
+      <div class="topbar-sep"></div>
+      <div class="topbar-mem">
+        <span class="mem-dot"></span>
+        <span id="mem-count">0 پیام</span>
+      </div>
+      <button class="clear-btn" onclick="clearChat()">پاک کردن چت</button>
+    </div>
+
+    <!-- chat -->
+    <div class="chat-wrap" id="chat-wrap">
+      <div class="welcome" id="welcome">
+        <div class="welcome-logo">SalviaX</div>
+        <div class="welcome-sub">با هوش مصنوعی گفتگو کنید · تصویر بسازید · تصویر تحلیل کنید</div>
+        <div class="welcome-chips">
+          <span class="chip" onclick="useChip(this)">یک ایده خلاقانه برایم بگو</span>
+          <span class="chip" onclick="useChip(this)">یک شعر کوتاه فارسی بنویس</span>
+          <span class="chip" onclick="useChip(this)">تفاوت GPT و Claude چیست؟</span>
+          <span class="chip" onclick="useChip(this)">یک تصویر زیبا از غروب آفتاب</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- input -->
+    <div class="input-shell">
+      <div class="attach-preview" id="attach-bar">
+        <img id="attach-thumb" src="" alt=""/>
+        <span id="attach-name"></span>
+        <span class="rm-attach" onclick="removeAttach()">✕</span>
+      </div>
+      <div class="input-box">
+        <textarea id="chat-input" placeholder="پیام بنویسید..." rows="1"></textarea>
+        <div class="input-actions">
+          <label class="icon-btn" title="آپلود تصویر">
+            🖼
+            <input type="file" accept="image/*" onchange="onImgUpload(event)"/>
+          </label>
+          <button id="send-btn" onclick="send()" title="ارسال">
+            &#9658;
+          </button>
+        </div>
+      </div>
+      <div class="input-hint">Enter برای ارسال &nbsp;·&nbsp; Shift+Enter برای خط جدید</div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════
+let model       = 'gpt-4o';
+let isImgMode   = false;
+let busy        = false;
+let history     = [];          // conversation memory [{role,content}]
+let attachB64   = null;
+let attachMime  = null;
+
+// ═══════════════════════════════════════
+//  MODEL SELECT
+// ═══════════════════════════════════════
+function selectModel(el) {
+  document.querySelectorAll('.model-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  model      = el.dataset.model;
+  isImgMode  = model === '__img__';
+  const label = el.textContent.trim();
+  document.getElementById('topbar-model').textContent = label;
+  document.getElementById('chat-input').placeholder =
+    isImgMode ? 'توضیح تصویر مورد نظر را بنویسید...' : 'پیام بنویسید...';
+  // mobile: close sidebar
+  document.getElementById('sidebar').classList.remove('open');
+}
+
+// ═══════════════════════════════════════
+//  CHAT MEMORY
+// ═══════════════════════════════════════
+function updateMemCount() {
+  const n = history.length;
+  document.getElementById('mem-count').textContent = n + ' پیام';
+}
+
+function newChat() {
+  history = [];
+  updateMemCount();
+  const wrap = document.getElementById('chat-wrap');
+  wrap.innerHTML = `<div class="welcome" id="welcome">
+    <div class="welcome-logo">SalviaX</div>
+    <div class="welcome-sub">با هوش مصنوعی گفتگو کنید · تصویر بسازید · تصویر تحلیل کنید</div>
+    <div class="welcome-chips">
+      <span class="chip" onclick="useChip(this)">یک ایده خلاقانه برایم بگو</span>
+      <span class="chip" onclick="useChip(this)">یک شعر کوتاه فارسی بنویس</span>
+      <span class="chip" onclick="useChip(this)">تفاوت GPT و Claude چیست؟</span>
+      <span class="chip" onclick="useChip(this)">یک تصویر زیبا از غروب آفتاب</span>
+    </div>
+  </div>`;
+  document.getElementById('sidebar').classList.remove('open');
+}
+
+function clearChat() { newChat(); }
+
+function useChip(el) {
+  document.getElementById('chat-input').value = el.textContent.trim();
+  send();
+}
+
+// ═══════════════════════════════════════
+//  IMAGE ATTACH
+// ═══════════════════════════════════════
+function onImgUpload(e) {
+  const file = e.target.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const dataUrl = ev.target.result;
+    attachB64   = dataUrl.split(',')[1];
+    attachMime  = file.type;
+    document.getElementById('attach-thumb').src = dataUrl;
+    document.getElementById('attach-name').textContent = file.name;
+    document.getElementById('attach-bar').classList.add('show');
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function removeAttach() {
+  attachB64  = null;
+  attachMime = null;
+  document.getElementById('attach-bar').classList.remove('show');
+  document.getElementById('attach-thumb').src = '';
+}
+
+// ═══════════════════════════════════════
+//  RENDER HELPERS
+// ═══════════════════════════════════════
+function removeWelcome() {
+  const w = document.getElementById('welcome');
+  if (w) w.remove();
+}
+
+function addRow(role, content, isError, thumbSrc) {
+  removeWelcome();
+  const wrap = document.getElementById('chat-wrap');
+
+  const row = document.createElement('div');
+  row.className = 'msg-row ' + role;
+
+  // avatar
+  const av = document.createElement('div');
+  av.className = 'avatar ' + (role === 'user' ? 'user-av' : 'ai');
+  av.textContent = role === 'user' ? 'شما' : 'AI';
+  row.appendChild(av);
+
+  // bubble wrap
+  const bw = document.createElement('div');
+  bw.className = 'bubble-wrap';
+
+  if (thumbSrc) {
+    const ti = document.createElement('img');
+    ti.src = thumbSrc;
+    ti.className = 'attach-thumb';
+    bw.appendChild(ti);
+  }
+
+  const bub = document.createElement('div');
+  bub.className = 'bubble' + (isError ? ' error' : '');
+
+  if (content instanceof HTMLElement) {
+    bub.appendChild(content);
+  } else {
+    bub.textContent = content || '';
+  }
+
+  bw.appendChild(bub);
+  row.appendChild(bw);
+  wrap.appendChild(row);
+  wrap.scrollTop = wrap.scrollHeight;
+  return bub;
+}
+
+function addThinking() {
+  removeWelcome();
+  const wrap = document.getElementById('chat-wrap');
+  const row = document.createElement('div');
+  row.className = 'msg-row ai';
+  row.id = 'thinking-row';
+
+  const av = document.createElement('div');
+  av.className = 'avatar ai';
+  av.textContent = 'AI';
+  row.appendChild(av);
+
+  const bw = document.createElement('div');
+  bw.className = 'bubble-wrap';
+  const t = document.createElement('div');
+  t.className = 'thinking';
+  t.innerHTML = '<span></span><span></span><span></span>';
+  bw.appendChild(t);
+  row.appendChild(bw);
+
+  wrap.appendChild(row);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function removeThinking() {
+  const t = document.getElementById('thinking-row');
+  if (t) t.remove();
+}
+
+// ═══════════════════════════════════════
+//  SEND
+// ═══════════════════════════════════════
+async function send() {
+  if (busy) return;
+  const inp = document.getElementById('chat-input');
+  const text = inp.value.trim();
+  if (!text && !attachB64) return;
+
+  const thumbSrc   = attachB64 ? `data:${attachMime};base64,${attachB64}` : null;
+  const curB64     = attachB64;
+  const curMime    = attachMime;
+
+  busy = true;
+  inp.value = '';
+  inp.style.height = 'auto';
+  document.getElementById('send-btn').disabled = true;
+
+  addRow('user', text || '🖼 تصویر ارسال شد', false, thumbSrc);
+  if (thumbSrc) removeAttach();
+  addThinking();
+
+  try {
+    if (isImgMode) {
+      // ── تولید تصویر ──
+      const imgEl = await puter.ai.txt2img(text || 'a beautiful image');
+      removeThinking();
+      addRow('ai', imgEl);
+
+    } else if (curB64) {
+      // ── Vision ──
+      const userContent = [
+        { type: 'image_url', image_url: { url: `data:${curMime};base64,${curB64}` } }
+      ];
+      if (text) userContent.push({ type: 'text', text });
+      history.push({ role: 'user', content: userContent });
+
+      const res = await puter.ai.chat(history, { model: model || 'gpt-4o' });
+      const reply = res?.message?.content ?? res?.text ?? String(res);
+      history.push({ role: 'assistant', content: reply });
+      removeThinking();
+      addRow('ai', reply);
+
+    } else {
+      // ── Chat ──
+      history.push({ role: 'user', content: text });
+      const res = await puter.ai.chat(history, { model });
+      const reply = res?.message?.content ?? res?.text ?? String(res);
+      history.push({ role: 'assistant', content: reply });
+      removeThinking();
+      addRow('ai', reply);
+    }
+
+  } catch (err) {
+    removeThinking();
+    // پاک‌سازی history اگر خطا رخ داد
+    if (history.length && history[history.length-1].role === 'user') history.pop();
+    addRow('ai', (err?.message || String(err)), true);
+  } finally {
+    busy = false;
+    document.getElementById('send-btn').disabled = false;
+    updateMemCount();
+    inp.focus();
+  }
+}
+
+// ═══════════════════════════════════════
+//  INPUT EVENTS
+// ═══════════════════════════════════════
+const inp = document.getElementById('chat-input');
+inp.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+inp.addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+
+// ═══════════════════════════════════════
+//  MOBILE SIDEBAR
+// ═══════════════════════════════════════
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+</script>
+</body>
+</html>
+
+HTML_EOF
+
+    success "فایل index.html با موفقیت ایجاد شد."
+    info "مسیر: $PROJECT_DIR/index.html"
+}
+
+get_local_ip() {
+    ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' \
+    || hostname -I 2>/dev/null | awk '{print $1}' \
+    || echo "127.0.0.1"
+}
+
+start_server() {
+    local ip
+    ip=$(get_local_ip)
+    local pidfile="$PROJECT_DIR/server.pid"
+
+    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+        warn "سرور از قبل در حال اجرا است (PID: $(cat "$pidfile"))."
+        return
+    fi
+
+    info "در حال راه‌اندازی live-server روی پورت $PORT..."
+
+    nohup live-server "$PROJECT_DIR" \
+        --port="$PORT" \
+        --no-browser \
+        --quiet \
+        >> "$LOG_FILE" 2>&1 &
+
+    local pid=$!
+    echo "$pid" > "$pidfile"
+    sleep 2
+
+    if kill -0 "$pid" 2>/dev/null; then
+        echo ""
+        echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║       سرور با موفقیت راه‌اندازی شد       ║${NC}"
+        echo -e "${GREEN}╠══════════════════════════════════════════╣${NC}"
+        echo -e "${GREEN}║  🌐 http://127.0.0.1:${PORT}              ║${NC}"
+        echo -e "${GREEN}║  📱 http://${ip}:${PORT}        ║${NC}"
+        echo -e "${GREEN}║  PID: ${pid}                              ║${NC}"
+        echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
+        echo ""
+        log "[INFO] سرور شروع به کار کرد - PID: $pid - پورت: $PORT"
+    else
+        error "خطا در راه‌اندازی سرور. لاگ را بررسی کنید: $LOG_FILE"
+    fi
+}
+
+stop_server() {
+    local pidfile="$PROJECT_DIR/server.pid"
+    if [ -f "$pidfile" ]; then
+        local pid
+        pid=$(cat "$pidfile")
+        if kill "$pid" 2>/dev/null; then
+            success "سرور متوقف شد (PID: $pid)."
+            rm -f "$pidfile"
+            log "[INFO] سرور متوقف شد."
+        else
+            warn "فرآیند یافت نشد. پاک‌سازی..."
+            rm -f "$pidfile"
+        fi
+    else
+        if pkill -f "live-server.*puter-ui" 2>/dev/null; then
+            success "سرور با pkill متوقف شد."
+        else
+            warn "هیچ سرور فعالی یافت نشد."
+        fi
+    fi
+}
+
+restart_server() {
+    info "در حال ری‌استارت سرور..."
+    stop_server
+    sleep 1
+    start_server
+}
+
+server_status() {
+    local pidfile="$PROJECT_DIR/server.pid"
+    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+        local ip; ip=$(get_local_ip)
+        echo -e "${GREEN}✅ سرور فعال است${NC} - PID: $(cat "$pidfile")"
+        echo -e "   🌐 http://127.0.0.1:$PORT"
+        echo -e "   📱 http://${ip}:$PORT"
+    else
+        echo -e "${RED}❌ سرور متوقف است${NC}"
+    fi
+}
+
+show_menu() {
+    echo ""
+    echo -e "${CYAN}╔══════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║       مدیریت Puter UI Server     ║${NC}"
+    echo -e "${CYAN}╠══════════════════════════════════╣${NC}"
+    echo -e "${CYAN}║  1) ▶  اجرای سرور                ║${NC}"
+    echo -e "${CYAN}║  2) ■  توقف سرور                 ║${NC}"
+    echo -e "${CYAN}║  3) ↺  ری‌استارت سرور             ║${NC}"
+    echo -e "${CYAN}║  4) ℹ  وضعیت سرور                ║${NC}"
+    echo -e "${CYAN}║  5) 📄  مشاهده لاگ                ║${NC}"
+    echo -e "${CYAN}║  0) ✖  خروج                      ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════╝${NC}"
+    echo ""
+    echo -ne "${YELLOW}انتخاب کنید [0-5]: ${NC}"
+}
+
+run_menu() {
+    while true; do
+        show_menu
+        read -r choice
+        case $choice in
+            1) start_server ;;
+            2) stop_server ;;
+            3) restart_server ;;
+            4) server_status ;;
+            5) tail -n 40 "$LOG_FILE" 2>/dev/null || warn "فایل لاگ یافت نشد." ;;
+            0) info "خروج از برنامه."; exit 0 ;;
+            *) warn "گزینه نامعتبر. لطفاً عدد 0 تا 5 وارد کنید." ;;
+        esac
+    done
+}
+
+clear
+echo -e "${BLUE}"
+echo "  ██████╗ ██╗   ██╗████████╗███████╗██████╗      █████╗ ██╗"
+echo "  ██╔══██╗██║   ██║╚══██╔══╝██╔════╝██╔══██╗    ██╔══██╗██║"
+echo "  ██████╔╝██║   ██║   ██║   █████╗  ██████╔╝    ███████║██║"
+echo "  ██╔═══╝ ██║   ██║   ██║   ██╔══╝  ██╔══██╗    ██╔══██║██║"
+echo "  ██║     ╚██████╔╝   ██║   ███████╗██║  ██║    ██║  ██║██║"
+echo "  ╚═╝      ╚═════╝    ╚═╝   ╚══════╝╚═╝  ╚═╝    ╚═╝  ╚═╝╚═╝"
+echo -e "${NC}"
+echo -e "${CYAN}  Puter.js UI Installer for Termux${NC}"
+echo -e "${CYAN}  ─────────────────────────────────${NC}"
+echo ""
+
+install_prerequisites
+setup_project_dir
+generate_index_html
+
+echo ""
+success "نصب و راه‌اندازی اولیه کامل شد!"
+info "فایل لاگ: $LOG_FILE"
+echo ""
+
+start_server
+run_menu
