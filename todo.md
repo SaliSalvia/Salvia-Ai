@@ -54,4 +54,19 @@
 - [x] README with setup and build instructions
 
 ## GitHub
-- [ ] Push all files to SaliSalvia/Salvia-Ai repository
+- [x] Push all files to SaliSalvia/Salvia-Ai repository
+
+## Image Generation & Editing Tab
+- [x] Image Generation screen: text-to-image with Stability AI + Puter.js fallback
+- [x] Style presets (Realistic, Anime, Oil Painting, Cinematic, etc.)
+- [x] Negative prompt support
+- [x] Image size selector (512x512, 768x768, 1024x1024)
+- [x] Generated image gallery with download/share
+- [x] Image Editing screen: prompt-based edit (img2img / inpainting)
+- [x] Pick image from gallery or camera
+- [x] Prompt-based edit: describe what to change (e.g. "make the sky purple")
+- [x] Strength slider (how much to change the image)
+- [x] Before/After comparison slider
+- [x] Edit history (undo chain)
+- [x] Bottom tab bar: Chat | Image | Edit
+- [ ] Push updated code to GitHub

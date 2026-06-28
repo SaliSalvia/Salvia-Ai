@@ -64,7 +64,12 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS"],
+    permissions: [
+      "POST_NOTIFICATIONS",
+      "READ_EXTERNAL_STORAGE",
+      "WRITE_EXTERNAL_STORAGE",
+      "CAMERA",
+    ],
     intentFilters: [
       {
         action: "VIEW",
@@ -86,7 +91,20 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
-    "react-native-keyboard-controller",
+    [
+      "expo-image-picker",
+      {
+        "photosPermission": "Allow SalviaX AI to access your photos for image editing.",
+        "cameraPermission": "Allow SalviaX AI to use your camera."
+      }
+    ],
+    [
+      "expo-media-library",
+      {
+        "photosPermission": "Allow SalviaX AI to save generated images to your gallery.",
+        "savePhotosPermission": "Allow SalviaX AI to save images to your gallery."
+      }
+    ],
     [
       "expo-audio",
       {
