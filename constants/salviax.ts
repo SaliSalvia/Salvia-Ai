@@ -21,13 +21,18 @@ export const COLORS = {
   black: '#000000',
 } as const;
 
+// Production-grade models with proven stability
 export const AI_MODELS = [
   { id: 'gpt-4o',       label: 'GPT-4o',        provider: 'puter', icon: '🤖' },
   { id: 'gpt-4o-mini',  label: 'GPT-4o Mini',   provider: 'puter', icon: '⚡' },
-  { id: 'claude-sonnet-4', label: 'Claude 4 Sonnet', provider: 'puter', icon: '🧠' },
-  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', provider: 'puter', icon: '✨' },
+  { id: 'claude-sonnet-4', label: 'Claude 4', provider: 'puter', icon: '🧠' },
+  { id: 'gemini-2.0-flash', label: 'Gemini 2.0', provider: 'puter', icon: '✨' },
   { id: 'deepseek-chat', label: 'DeepSeek V3',   provider: 'puter', icon: '🔍' },
-  { id: 'meta-llama/llama-3.1-8b-instruct:free', label: 'Llama 3.1 8B', provider: 'openrouter', icon: '🦙' },
+  // Fast & reliable with Groq
+  { id: 'llama-3.3-70b', label: 'Llama 3.3 70B (Groq)', provider: 'groq', icon: '🦙' },
+  // OpenRouter models - stable with API key
+  { id: 'meta-llama/llama-3.1-8b-instruct:free', label: 'Llama 3.1 8B', provider: 'openrouter', icon: '🚀' },
+  { id: 'gpt-4-turbo', label: 'GPT-4 Turbo (OR)', provider: 'openrouter', icon: '⚙️' },
 ] as const;
 
 export type ModelId = typeof AI_MODELS[number]['id'];

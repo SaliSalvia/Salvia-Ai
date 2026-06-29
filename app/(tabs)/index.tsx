@@ -21,7 +21,7 @@ import SettingsDrawer from '@/components/SettingsDrawer';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SIDEBAR_WIDTH = 260;
 
-// ─── Empty State ───────────────────────────────────────────────────────────────
+// ─── Empty State ─────────────────────────────────────────────────────────
 const EmptyState = React.memo(({ isRTL }: { isRTL: boolean }) => (
   <View style={emptyStyles.container}>
     <Text style={emptyStyles.logo}>SalviaX</Text>
@@ -57,7 +57,7 @@ const emptyStyles = StyleSheet.create({
   chipText: { color: COLORS.muted, fontSize: 13 },
 });
 
-// ─── Main ChatScreen ───────────────────────────────────────────────────────────
+// ─── Main ChatScreen ───────────────────────────────────────────────────────
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const { state, dispatch, currentConversation, createNewConversation, saveConversations } = useApp();
@@ -123,7 +123,7 @@ export default function ChatScreen() {
 
     // Finalize any streaming message
     if (streamingMsgIdRef.current && state.currentConversationId) {
-      const finalContent = streamBufferRef.current || '(توقف داده شد)';
+      const finalContent = streamBufferRef.current || (isRTL ? 'توقف داده شد' : 'Stopped');
       dispatch({
         type: 'UPDATE_MESSAGE',
         payload: {
@@ -136,7 +136,7 @@ export default function ChatScreen() {
       streamingMsgIdRef.current = null;
       streamBufferRef.current = '';
     }
-  }, [state.currentConversationId, dispatch]);
+  }, [state.currentConversationId, dispatch, isRTL]);
 
   // ─── Handle Puter WebView messages ────────────────────────────────────────
   const handleWebViewMessage = useCallback((event: any) => {
@@ -177,12 +177,16 @@ export default function ChatScreen() {
           saveConversations(state.conversations);
         });
       } else if (msg.type === 'error') {
+        let errorMsg = msg.data || (isRTL ? 'خطا در دریافت پاسخ' : 'Error receiving response');
+        if (errorMsg.includes('timeout')) {
+          errorMsg = isRTL ? '⏱️ مهلت زمانی تمام شد' : '⏱️ Request timeout';
+        }
         dispatch({
           type: 'UPDATE_MESSAGE',
           payload: {
             conversationId: convId,
             messageId: msgId,
-            content: msg.data || 'خطا در دریافت پاسخ',
+            content: errorMsg,
             isStreaming: false,
           },
         });
@@ -192,9 +196,9 @@ export default function ChatScreen() {
         setIsStreaming(false);
       }
     } catch (e) {
-      // ignore parse errors
+      console.error('WebView message parse error:', e);
     }
-  }, [state.currentConversationId, state.conversations, dispatch, saveConversations]);
+  }, [state.currentConversationId, state.conversations, dispatch, saveConversations, isRTL]);
 
   // ─── Send Message ──────────────────────────────────────────────────────────
   const handleSend = useCallback(async (text: string) => {
@@ -243,7 +247,7 @@ export default function ChatScreen() {
       const html = buildPuterHTML(history, settings.selectedModel);
       setPuterHTML(html);
     } else {
-      // Direct API streaming
+      // Direct API streaming with timeout
       abortControllerRef.current = new AbortController();
       const callbacks = {
         onToken: (token: string) => {
@@ -276,12 +280,20 @@ export default function ChatScreen() {
           });
         },
         onError: (error: string) => {
+          let errorMsg = error;
+          if (error.includes('timeout')) {
+            errorMsg = isRTL ? '⏱️ مهلت زمانی تمام شد - دوباره تلاش کنید' : '⏱️ Request timeout - try again';
+          } else if (error.includes('Invalid API')) {
+            errorMsg = isRTL ? '🔑 API Key نامعتبر است' : '🔑 Invalid API Key';
+          } else if (error.includes('Rate limited')) {
+            errorMsg = isRTL ? '⚠️ محدودیت درخواست - چند لحظه صبر کنید' : '⚠️ Rate limited - wait a moment';
+          }
           dispatch({
             type: 'UPDATE_MESSAGE',
             payload: {
               conversationId: convId!,
               messageId: aiMsgId,
-              content: error,
+              content: errorMsg,
               isStreaming: false,
             },
           });
@@ -297,7 +309,7 @@ export default function ChatScreen() {
         streamFromGroq(history, settings.selectedModel, settings.groqApiKey, callbacks, abortControllerRef.current.signal);
       }
     }
-  }, [isStreaming, state.currentConversationId, state.conversations, settings, currentConversation, dispatch, createNewConversation, saveConversations, abortStream]);
+  }, [isStreaming, state.currentConversationId, state.conversations, settings, currentConversation, dispatch, createNewConversation, saveConversations, abortStream, isRTL]);
 
   // ─── Render Message ────────────────────────────────────────────────────────
   const renderMessage = useCallback(({ item }: { item: Message }) => (
@@ -330,12 +342,15 @@ export default function ChatScreen() {
               payload: {
                 conversationId: state.currentConversationId!,
                 messageId: streamingMsgIdRef.current!,
-                content: 'خطا در اتصال به سرویس Puter.js',
+                content: isRTL ? '❌ خطا در اتصال' : '❌ Connection error',
                 isStreaming: false,
               },
             });
             setPuterHTML(null);
             setIsStreaming(false);
+          }}
+          onRenderProcessGone={() => {
+            abortStream();
           }}
         />
       )}
@@ -368,7 +383,7 @@ export default function ChatScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        keyboardVerticalOffset={0}
       >
         {/* Chat List */}
         <View style={styles.flex}>
@@ -382,6 +397,7 @@ export default function ChatScreen() {
               keyExtractor={keyExtractor}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
+              estimatedItemSize={100}
             />
           )}
         </View>

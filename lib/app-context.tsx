@@ -5,7 +5,7 @@ import {
   STORAGE_KEYS, ModelId
 } from '@/constants/salviax';
 
-// ─── State ────────────────────────────────────────────────────────────────────
+// ─── State ─────────────────────────────────────────────────────────────────
 interface AppState {
   settings: AppSettings;
   conversations: Conversation[];
@@ -24,7 +24,7 @@ const initialState: AppState = {
   isLoading: true,
 };
 
-// ─── Actions ──────────────────────────────────────────────────────────────────
+// ─── Actions ────────────────────────────────────────────────────────────────
 type Action =
   | { type: 'SET_SETTINGS'; payload: Partial<AppSettings> }
   | { type: 'SET_CONVERSATIONS'; payload: Conversation[] }
@@ -77,7 +77,7 @@ function reducer(state: AppState, action: Action): AppState {
   }
 }
 
-// ─── Context ──────────────────────────────────────────────────────────────────
+// ─── Context ────────────────────────────────────────────────────────────────
 interface AppContextValue {
   state: AppState;
   dispatch: React.Dispatch<Action>;
